@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=yes"
+    />
+    <title>Possum Predictor · ML Regression Studio | Save to CSV</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  </head>
+  <body>
+    <div class="bg-glow"></div>
+    <div class="bg-orb"></div>
+
+    <div class="wrapper">
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          margin-bottom: 24px;
+        "
+      >
+        <div>
+          <h1
+            style="
+              font-size: 2.2rem;
+              background: linear-gradient(135deg, #c084fc, #60a5fa);
+              -webkit-background-clip: text;
+              background-clip: text;
+              color: transparent;
+            "
+          >
+            <i class="fas fa-paw"></i> possum·regressor
+          </h1>
+          <p style="color: #94a3b8">
+            Multivariate linear regression · head length estimation · real-time
+            CSV persistence
+          </p>
+        </div>
+        <div class="glass-card" style="padding: 8px 18px">
+          <i class="fas fa-save"></i> auto-save to prediction_output.csv
+        </div>
+      </div>
+
+      <!-- KPI section -->
+      <div class="stats-grid">
+        <div class="stat">
+          <h4><i class="fas fa-chart-line"></i> R² Score</h4>
+          <div class="value">0.597</div>
+          <small>moderate fit</small>
+        </div>
+        <div class="stat">
+          <h4><i class="fas fa-ruler"></i> RMSE</h4>
+          <div class="value">1.752 <span style="font-size: 1rem">mm</span></div>
+        </div>
+        <div class="stat">
+          <h4><i class="fas fa-database"></i> Records</h4>
+          <div class="value" id="recordCount">0</div>
+          <small>stored predictions</small>
+        </div>
+        <div class="stat">
+          <h4><i class="fas fa-microchip"></i> Model</h4>
+          <div class="value">LinearReg</div>
+          <small>6 features + scaling</small>
+        </div>
+      </div>
+
+      <!-- CHARTS -->
+      <div class="charts-row">
+        <div class="chart-container">
+          <div style="font-weight: 600; margin-bottom: 12px">
+            <i class="fas fa-chart-scatter"></i> Actual vs Predicted
+          </div>
+          <canvas id="scatterChart"></canvas>
+        </div>
+        <div class="chart-container">
+          <div style="font-weight: 600; margin-bottom: 12px">
+            <i class="fas fa-chart-bar"></i> Residual Errors
+          </div>
+          <canvas id="residualChart"></canvas>
+        </div>
+      </div>
+
+      <!-- PREDICTION FORM + CSV SAVE -->
+      <div class="form-panel">
+        <h3>
+          <i class="fas fa-brain"></i> New Possum Measurement · Predict & Append
+          to CSV
+        </h3>
+        <div class="form-grid">
+          <div class="input-field">
+            <label>📏 Total Length (cm)</label
+            ><input type="number" id="totlngth" step="any" value="87.0" />
+          </div>
+          <div class="input-field">
+            <label>🐾 Tail Length (cm)</label
+            ><input type="number" id="taill" step="any" value="36.0" />
+          </div>
+          <div class="input-field">
+            <label>📐 Skull Width (mm)</label
+            ><input type="number" id="skullw" step="any" value="56.0" />
+          </div>
+          <div class="input-field">
+            <label>💪 Chest Girth (cm)</label
+            ><input type="number" id="chest" step="any" value="28.0" />
+          </div>
+          <div class="input-field">
+            <label>🍃 Belly Girth (cm)</label
+            ><input type="number" id="belly" step="any" value="35.0" />
+          </div>
+          <div class="input-field">
+            <label>⚥ Sex (male/female)</label>
+            <select id="sexSelect">
+              <option value="female">female</option>
+              <option value="male">male</option>
+            </select>
+          </div>
+        </div>
+        <div
+          style="
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            justify-content: space-between;
+          "
+        >
+          <button id="predictAndSaveBtn">
+            <i class="fas fa-cloud-upload-alt"></i> Predict & Save to CSV
+          </button>
+          <div id="predictionResult" class="prediction-badge">
+            — mm predicted
+          </div>
+        </div>
+        <div
+          id="saveToast"
+          style="
+            margin-top: 16px;
+            font-size: 0.8rem;
+            color: #86efac;
+            display: none;
+          "
+        >
+          <i class="fas fa-check-circle"></i> Record appended to
+          prediction_output.csv
+        </div>
+      </div>
+
+      <!-- DATA TABLE with search/sort -->
+      <div class="table-wrapper">
+        <div class="table-header">
+          <h3>
+            <i class="fas fa-table"></i> Historical Predictions (CSV storage)
+          </h3>
+          <div class="search-group">
+            <input
+              type="text"
+              id="searchInput"
+              placeholder="Filter by Head Length ..."
+            />
+            <button id="searchBtn" class="small-btn">
+              <i class="fas fa-filter"></i> Filter
+            </button>
+            <button id="resetTableBtn" class="small-btn">
+              <i class="fas fa-sync-alt"></i> Reset
+            </button>
+            <button id="sortBtn" class="small-btn">
+              <i class="fas fa-sort-amount-down"></i> Sort by Actual
+            </button>
+          </div>
+        </div>
+        <div style="overflow-x: auto">
+          <table id="mainTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Total L.</th>
+                <th>Tail L.</th>
+                <th>Skull W.</th>
+                <th>Chest</th>
+                <th>Belly</th>
+                <th>Sex</th>
+                <th>Predicted Head (mm)</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <tr>
+                <td colspan="8" style="text-align: center">
+                  Loading prediction_output.csv ...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <footer>
+        ⚙️ Py model (LinearRegression) with StandardScaler | each new prediction
+        auto-appends to CSV | interactive charts update instantly
+      </footer>
+    </div>
+
+    <script>
+      // ----- GLOBAL STORAGE -----
+      let dataset = []; // each object: { total, tail, skull, chest, belly, sex, predictedHead }
+      let scatterChart, residualChart;
+      const API_BASE = "http://localhost:5000"; // Backend API URL
+
+      // ----- Load predictions from backend API -----
+      async function loadPredictionsFromAPI() {
+        try {
+          const response = await fetch(`${API_BASE}/api/predictions`);
+          if (!response.ok)
+            throw new Error("Failed to load predictions from API");
+          const result = await response.json();
+          if (result.success && result.data && result.data.length > 0) {
+            dataset = result.data;
+            console.log(`Loaded ${dataset.length} predictions from backend`);
+          } else {
+            console.log("No predictions found, using sample data");
+            fallbackSampleData();
+          }
+        } catch (err) {
+          console.warn(
+            "Could not load from backend API, using demo entries:",
+            err,
+          );
+          fallbackSampleData();
+        }
+        renderTable();
+        updateChartsAndStats();
+      }
+
+      function fallbackSampleData() {
+        // initial demo entries based on real model outputs from Jupyter notebook
+        dataset = [
+          {
+            total: 87,
+            tail: 36,
+            skull: 56,
+            chest: 28,
+            belly: 35,
+            sex: "male",
+            predictedHead: 93.36,
+          },
+          {
+            total: 92,
+            tail: 36,
+            skull: 58,
+            chest: 30,
+            belly: 37,
+            sex: "male",
+            predictedHead: 96.8,
+          },
+          {
+            total: 86,
+            tail: 36,
+            skull: 50,
+            chest: 56,
+            belly: 60,
+            sex: "male",
+            predictedHead: 95.44,
+          },
+          {
+            total: 87,
+            tail: 30,
+            skull: 50,
+            chest: 36,
+            belly: 35,
+            sex: "female",
+            predictedHead: 90.71,
+          },
+          {
+            total: 89,
+            tail: 38,
+            skull: 54,
+            chest: 29,
+            belly: 34,
+            sex: "female",
+            predictedHead: 92.15,
+          },
+          {
+            total: 94,
+            tail: 39,
+            skull: 60,
+            chest: 30,
+            belly: 36,
+            sex: "male",
+            predictedHead: 94.82,
+          },
+        ];
+      }
+
+      // ---- Linear Regression prediction (matching trained coefficients from notebook) ----
+      function predictHeadLength(total, tail, skull, chest, belly, sex) {
+        const means = {
+          totlngth: 86.95,
+          taill: 36.85,
+          skullw: 56.24,
+          chest: 26.98,
+          belly: 32.45,
+        };
+        const stds = {
+          totlngth: 4.98,
+          taill: 2.15,
+          skullw: 3.45,
+          chest: 2.41,
+          belly: 3.27,
+        };
+        const zTot = (total - means.totlngth) / stds.totlngth;
+        const zTail = (tail - means.taill) / stds.taill;
+        const zSkull = (skull - means.skullw) / stds.skullw;
+        const zChest = (chest - means.chest) / stds.chest;
+        const zBelly = (belly - means.belly) / stds.belly;
+        const sexEnc = sex === "male" ? 1 : 0;
+        const coef = [0.524, 0.187, 0.891, 0.312, 0.228, 0.764];
+        const intercept = 92.58;
+        let pred =
+          intercept +
+          coef[0] * zTot +
+          coef[1] * zTail +
+          coef[2] * zSkull +
+          coef[3] * zChest +
+          coef[4] * zBelly +
+          coef[5] * sexEnc;
+        return Math.min(105, Math.max(80, pred));
+      }
+
+      // Make prediction via backend API and save to CSV
+      async function savePredictionViaAPI(
+        total,
+        tail,
+        skull,
+        chest,
+        belly,
+        sex,
+      ) {
+        try {
+          const response = await fetch(`${API_BASE}/api/predict`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ total, tail, skull, chest, belly, sex }),
+          });
+
+          if (!response.ok) throw new Error("Prediction failed");
+          const result = await response.json();
+
+          if (result.success) {
+            const newEntry = {
+              total,
+              tail,
+              skull,
+              chest,
+              belly,
+              sex: sex.toLowerCase(),
+              predictedHead: result.predicted,
+            };
+            dataset.unshift(newEntry);
+
+            renderTable();
+            updateChartsAndStats();
+
+            return result;
+          } else {
+            throw new Error(result.error || "Unknown error");
+          }
+        } catch (err) {
+          console.error("Error saving prediction:", err);
+          throw err;
+        }
+      }
+
+      // Render HTML table
+      function renderTable() {
+        const tbody = document.getElementById("tableBody");
+        if (!dataset.length) {
+          tbody.innerHTML =
+            '<tr><td colspan="8">No records. Add a new prediction.</td></tr>';
+          document.getElementById("recordCount").innerText = "0";
+          return;
+        }
+        let html = "";
+        dataset.slice(0, 50).forEach((rec, idx) => {
+          html += `<tr>
+      <td>${idx + 1}</td>
+      <td>${rec.total}</td>
+      <td>${rec.tail}</td>
+      <td>${rec.skull}</td>
+      <td>${rec.chest}</td>
+      <td>${rec.belly}</td>
+      <td>${rec.sex}</td>
+      <td><strong>${rec.predictedHead.toFixed(2)} mm</strong></td>
+    </tr>`;
+        });
+        tbody.innerHTML = html;
+        document.getElementById("recordCount").innerText = dataset.length;
+      }
+
+      function updateChartsAndStats() {
+        if (dataset.length === 0) return;
+        // Safely destroy existing charts
+        if (
+          window.scatterChart &&
+          typeof window.scatterChart.destroy === "function"
+        )
+          window.scatterChart.destroy();
+        if (
+          window.residualChart &&
+          typeof window.residualChart.destroy === "function"
+        )
+          window.residualChart.destroy();
+
+        const indices = dataset.map((_, i) => i + 1);
+        const preds = dataset.map((d) => d.predictedHead);
+        const meanPred = preds.reduce((a, b) => a + b, 0) / preds.length;
+        const residuals = preds.map((p) => p - meanPred);
+
+        const ctxScatter = document
+          .getElementById("scatterChart")
+          .getContext("2d");
+        window.scatterChart = new Chart(ctxScatter, {
+          type: "scatter",
+          data: {
+            datasets: [
+              {
+                label: "Predictions (mm)",
+                data: indices.map((idx, i) => ({ x: idx, y: preds[i] })),
+                backgroundColor: "#a78bfa",
+                pointRadius: 5,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+              x: { title: { display: true, text: "Record Index" } },
+              y: { title: { display: true, text: "Head Length (mm)" } },
+            },
+          },
+        });
+        const ctxRes = document
+          .getElementById("residualChart")
+          .getContext("2d");
+        window.residualChart = new Chart(ctxRes, {
+          type: "bar",
+          data: {
+            labels: indices.map((i) => `#${i}`),
+            datasets: [
+              {
+                label: "Deviation from Mean (mm)",
+                data: residuals,
+                backgroundColor: "#f97316",
+              },
+            ],
+          },
+          options: { responsive: true, maintainAspectRatio: true },
+        });
+      }
+
+      // PREDICT and SAVE event
+      document
+        .getElementById("predictAndSaveBtn")
+        .addEventListener("click", async () => {
+          const total = parseFloat(document.getElementById("totlngth").value);
+          const tail = parseFloat(document.getElementById("taill").value);
+          const skull = parseFloat(document.getElementById("skullw").value);
+          const chest = parseFloat(document.getElementById("chest").value);
+          const belly = parseFloat(document.getElementById("belly").value);
+          const sex = document.getElementById("sexSelect").value;
+
+          if (
+            isNaN(total) ||
+            isNaN(tail) ||
+            isNaN(skull) ||
+            isNaN(chest) ||
+            isNaN(belly)
+          ) {
+            alert("Please enter valid numeric values.");
+            return;
+          }
+
+          const button = document.getElementById("predictAndSaveBtn");
+          const originalText = button.innerHTML;
+          button.disabled = true;
+          button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+          try {
+            const result = await savePredictionViaAPI(
+              total,
+              tail,
+              skull,
+              chest,
+              belly,
+              sex,
+            );
+
+            document.getElementById("predictionResult").innerHTML =
+              `<i class="fas fa-chart-simple"></i> ${result.predicted.toFixed(2)} mm`;
+
+            const toastMsg = document.getElementById("saveToast");
+            toastMsg.style.display = "block";
+            toastMsg.innerHTML =
+              '<i class="fas fa-check-circle"></i> Prediction saved to CSV! ✓';
+            setTimeout(() => {
+              toastMsg.style.display = "none";
+            }, 3500);
+          } catch (err) {
+            console.error("Error:", err);
+            alert("Failed to save prediction: " + err.message);
+          } finally {
+            button.disabled = false;
+            button.innerHTML = originalText;
+          }
+        });
+
+      // Table controls
+      function applyFilter() {
+        const searchVal = document.getElementById("searchInput").value.trim();
+        if (searchVal === "") {
+          renderFullDataset();
+          return;
+        }
+        const num = parseFloat(searchVal);
+        if (!isNaN(num)) {
+          const filtered = dataset.filter(
+            (d) =>
+              Math.abs(d.predictedHead - num) < 1.5 ||
+              d.predictedHead.toFixed(1).includes(searchVal),
+          );
+          renderCustomTable(filtered);
+        } else {
+          renderFullDataset();
+        }
+      }
+
+      function renderFullDataset() {
+        renderTable();
+      }
+
+      function renderCustomTable(data) {
+        const tbody = document.getElementById("tableBody");
+        if (!data.length) {
+          tbody.innerHTML = '<tr><td colspan="8">No matches</td></tr>';
+          return;
+        }
+        let html = "";
+        data.forEach((rec, idx) => {
+          html += `<tr><td>${idx + 1}</td><td>${rec.total}</td><td>${rec.tail}</td><td>${rec.skull}</td><td>${rec.chest}</td><td>${rec.belly}</td><td>${rec.sex}</td><td>${rec.predictedHead.toFixed(2)} mm</td></tr>`;
+        });
+        tbody.innerHTML = html;
+      }
+
+      document
+        .getElementById("searchBtn")
+        .addEventListener("click", applyFilter);
+      document.getElementById("resetTableBtn").addEventListener("click", () => {
+        document.getElementById("searchInput").value = "";
+        renderFullDataset();
+      });
+      document.getElementById("sortBtn").addEventListener("click", () => {
+        const sorted = [...dataset].sort(
+          (a, b) => a.predictedHead - b.predictedHead,
+        );
+        renderCustomTable(sorted);
+      });
+
+      // Load initial data
+      async function bootstrap() {
+        console.log("Bootstrapping app...");
+        await loadPredictionsFromAPI();
+        if (dataset.length === 0) {
+          console.log("No data loaded, using sample data");
+          fallbackSampleData();
+          renderTable();
+          updateChartsAndStats();
+        }
+      }
+
+      bootstrap();
+    </script>
+  </body>
+</html>
